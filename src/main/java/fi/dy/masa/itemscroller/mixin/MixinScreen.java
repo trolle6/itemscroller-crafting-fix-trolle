@@ -14,7 +14,7 @@ import fi.dy.masa.itemscroller.event.RenderEventHandler;
 @Mixin(Screen.class)
 public abstract class MixinScreen
 {
-    @Inject(method = "renderWithTooltip", at = @At(value = "RETURN"))
+    @Inject(method = "renderWithTooltip", at = @At(value = "TAIL"))
     private void onDrawScreenPost(DrawContext context, int mouseX, int mouseY, float delta, CallbackInfo ci)
     {
         RenderEventHandler.instance().onDrawScreenPost(MinecraftClient.getInstance(), context);
