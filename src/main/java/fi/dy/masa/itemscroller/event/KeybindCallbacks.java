@@ -3,7 +3,6 @@ package fi.dy.masa.itemscroller.event;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
-import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -28,7 +27,6 @@ import fi.dy.masa.itemscroller.recipes.CraftingHandler;
 import fi.dy.masa.itemscroller.recipes.RecipePattern;
 import fi.dy.masa.itemscroller.recipes.RecipeStorage;
 import fi.dy.masa.itemscroller.util.*;
-import fi.dy.masa.itemscroller.villager.VillagerInstantTrade;
 
 public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
 {
@@ -39,7 +37,6 @@ public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
     }
 
     protected int massCraftTicker;
-    protected int villagerTradeTicker;
     private long badRecipeClicks;
 
     private KeybindCallbacks()
@@ -55,7 +52,6 @@ public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
         }
 
         Hotkeys.MASS_CRAFT_TOGGLE.getKeybind().setCallback(new KeyCallbackToggleBooleanConfigWithMessage(Configs.Generic.MASS_CRAFT_HOLD));
-        Hotkeys.VILLAGER_TRADE_FAVORITES_TOGGLE.getKeybind().setCallback(new KeyCallbackToggleBooleanConfigWithMessage(Configs.Generic.VILLAGER_TRADE_FAVORITES_HOLD));
     }
 
     public boolean functionalityEnabled()
@@ -98,28 +94,6 @@ public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
         {
             GuiBase.openGui(new GuiConfigs());
             return true;
-        }
-        else if (key == Hotkeys.VILLAGER_TRADE_FAVORITES.getKeybind())
-        {
-            if (this.functionalityEnabled() == false ||
-                Configs.Toggles.VILLAGER_TRADE_FEATURES.getBooleanValue() == false)
-            {
-                return false;
-            }
-
-            VillagerInstantTrade.requestTrade();
-
-            if (mc.screen instanceof MerchantScreen)
-            {
-                return VillagerInstantTrade.tradeFavoritesAndMaybeClose(mc, VillagerInstantTrade.isInstantTradeEnabled());
-            }
-
-            if (VillagerInstantTrade.isInstantTradeEnabled())
-            {
-                return VillagerInstantTrade.tryOpenLookedAtVillager(mc);
-            }
-
-            return false;
         }
 
         if (this.functionalityEnabled() == false ||
@@ -182,6 +156,10 @@ public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
                 return true;
             }
         }
+        else if (key == Hotkeys.VILLAGER_TRADE_FAVORITES.getKeybind())
+        {
+            return InventoryUtils.villagerTradeEverythingPossibleWithAllFavoritedTrades();
+        }
         else if (key == Hotkeys.SLOT_DEBUG.getKeybind())
         {
             if (slot != null)
@@ -229,54 +207,6 @@ public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
         }
 
         this.onClientTickMassCraftImpl(mc);
-        this.onClientTickVillagerTradeImpl(mc);
-    }
-
-    private void onClientTickVillagerTradeImpl(Minecraft mc)
-    {
-        if (mc.player == null || mc.level == null)
-        {
-            return;
-        }
-
-        if (Configs.Toggles.VILLAGER_TRADE_FEATURES.getBooleanValue() == false)
-        {
-            return;
-        }
-
-        if (VillagerInstantTrade.isInstantTradeEnabled())
-        {
-            VillagerInstantTrade.onClientTick(mc);
-            return;
-        }
-
-        if (GuiUtils.getCurrentScreen() instanceof MerchantScreen &&
-            Configs.GUI_BLACKLIST.contains(GuiUtils.getCurrentScreen().getClass().getName()) == false &&
-            VillagerInstantTrade.isTradeRequestActive())
-        {
-            if (++this.villagerTradeTicker < Configs.Generic.VILLAGER_TRADE_INTERVAL.getIntegerValue())
-            {
-                return;
-            }
-
-            if (Configs.Generic.RATE_LIMIT_CLICK_PACKETS.getBooleanValue())
-            {
-                ClickPacketBuffer.setShouldBufferClickPackets(true);
-            }
-
-            InventoryUtils.villagerTradeEverythingPossibleWithAllFavoritedTrades();
-
-            if (Configs.Generic.RATE_LIMIT_CLICK_PACKETS.getBooleanValue())
-            {
-                ClickPacketBuffer.setShouldBufferClickPackets(false);
-            }
-
-            this.villagerTradeTicker = 0;
-        }
-        else
-        {
-            this.villagerTradeTicker = 0;
-        }
     }
 
     private void onClientTickMassCraftImpl(Minecraft mc)

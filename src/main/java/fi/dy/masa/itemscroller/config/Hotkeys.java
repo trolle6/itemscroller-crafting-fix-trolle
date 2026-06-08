@@ -12,8 +12,6 @@ public class Hotkeys
     private static final KeybindSettings GUI_RELAXED = KeybindSettings.create(KeybindSettings.Context.GUI, KeyAction.PRESS, true, false, false, false);
     private static final KeybindSettings GUI_RELAXED_CANCEL = KeybindSettings.create(KeybindSettings.Context.GUI, KeyAction.PRESS, true, false, false, true);
     private static final KeybindSettings GUI_NO_ORDER = KeybindSettings.create(KeybindSettings.Context.GUI, KeyAction.PRESS, false, false, false, true);
-    private static final KeybindSettings ANY_RELAXED = KeybindSettings.create(KeybindSettings.Context.ANY, KeyAction.PRESS, true, false, false, false);
-
     private static final String HOTKEYS_KEY = Reference.MOD_ID+".config.hotkeys";
 
     public static final ConfigHotkey OPEN_CONFIG_GUI            = new ConfigHotkey("openConfigGui",         "I,C").apply(HOTKEYS_KEY);
@@ -28,8 +26,7 @@ public class Hotkeys
     public static final ConfigHotkey STORE_RECIPE               = new ConfigHotkey("storeRecipe",           "BUTTON_3", GUI_RELAXED_CANCEL).apply(HOTKEYS_KEY);
     public static final ConfigHotkey THROW_CRAFT_RESULTS        = new ConfigHotkey("throwCraftResults",     "LEFT_CONTROL,T", GUI_NO_ORDER).apply(HOTKEYS_KEY);
     public static final ConfigHotkey TOGGLE_MOD_ON_OFF          = new ConfigHotkey("toggleModOnOff",        "", KeybindSettings.GUI).apply(HOTKEYS_KEY);
-    public static final ConfigHotkey VILLAGER_TRADE_FAVORITES         = new ConfigHotkey("villagerTradeFavorites",       "", ANY_RELAXED).apply(HOTKEYS_KEY);
-    public static final ConfigHotkey VILLAGER_TRADE_FAVORITES_TOGGLE  = new ConfigHotkey("villagerTradeFavoritesToggle", "").apply(HOTKEYS_KEY);
+    public static final ConfigHotkey VILLAGER_TRADE_FAVORITES         = new ConfigHotkey("villagerTradeFavorites",       "", KeybindSettings.GUI).apply(HOTKEYS_KEY);
 
     public static final ConfigHotkey KEY_DRAG_DROP_LEAVE_ONE    = new ConfigHotkey("keyDragDropLeaveOne",   "LEFT_SHIFT,Q,BUTTON_2", GUI_NO_ORDER).apply(HOTKEYS_KEY);
     public static final ConfigHotkey KEY_DRAG_DROP_SINGLE       = new ConfigHotkey("keyDragDropSingle",     "Q,BUTTON_1", GUI_NO_ORDER).apply(HOTKEYS_KEY);
@@ -72,7 +69,6 @@ public class Hotkeys
             STORE_RECIPE,
             THROW_CRAFT_RESULTS,
             VILLAGER_TRADE_FAVORITES,
-            VILLAGER_TRADE_FAVORITES_TOGGLE,
 
             MODIFIER_MOVE_EVERYTHING,
             MODIFIER_MOVE_MATCHING,
