@@ -24,7 +24,11 @@ import fi.dy.masa.itemscroller.config.Configs;
 import fi.dy.masa.itemscroller.config.Hotkeys;
 import fi.dy.masa.itemscroller.gui.ItemScrollerIcons;
 import fi.dy.masa.itemscroller.util.InventoryUtils;
-import fi.dy.masa.itemscroller.villager.*;
+import fi.dy.masa.itemscroller.villager.FavoriteData;
+import fi.dy.masa.itemscroller.villager.IMerchantScreenHandler;
+import fi.dy.masa.itemscroller.villager.VillagerData;
+import fi.dy.masa.itemscroller.villager.VillagerDataStorage;
+import fi.dy.masa.itemscroller.villager.VillagerUtils;
 
 @Mixin(MerchantScreen.class)
 public abstract class MixinMerchantScreen extends AbstractContainerScreen<MerchantMenu>
