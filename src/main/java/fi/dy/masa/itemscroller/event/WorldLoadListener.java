@@ -10,6 +10,7 @@ import fi.dy.masa.itemscroller.config.Configs;
 import fi.dy.masa.itemscroller.recipes.RecipeStorage;
 import fi.dy.masa.itemscroller.util.ClickPacketBuffer;
 import fi.dy.masa.itemscroller.villager.VillagerDataStorage;
+import fi.dy.masa.itemscroller.villager.VillagerFavoriteTradeHandler;
 
 public class WorldLoadListener implements IWorldLoadListener
 {
@@ -41,6 +42,7 @@ public class WorldLoadListener implements IWorldLoadListener
         if (worldAfter == null)
         {
             ClickPacketBuffer.reset();
+            VillagerFavoriteTradeHandler.reset();
         }
     }
 

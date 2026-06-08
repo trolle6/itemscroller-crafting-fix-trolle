@@ -27,6 +27,7 @@ import fi.dy.masa.itemscroller.recipes.CraftingHandler;
 import fi.dy.masa.itemscroller.recipes.RecipePattern;
 import fi.dy.masa.itemscroller.recipes.RecipeStorage;
 import fi.dy.masa.itemscroller.util.*;
+import fi.dy.masa.itemscroller.villager.VillagerFavoriteTradeHandler;
 
 public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
 {
@@ -206,6 +207,7 @@ public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
             return;
         }
 
+        VillagerFavoriteTradeHandler.onClientTick(mc);
         this.onClientTickMassCraftImpl(mc);
     }
 
