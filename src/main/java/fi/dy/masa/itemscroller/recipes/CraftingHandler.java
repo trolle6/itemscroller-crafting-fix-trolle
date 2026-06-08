@@ -5,16 +5,16 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.Slot;
 import fi.dy.masa.itemscroller.ItemScroller;
 
 public class CraftingHandler
 {
-    private static final Map<CraftingOutputSlot, SlotRange> CRAFTING_GRID_SLOTS = new HashMap<CraftingOutputSlot, SlotRange>();
-    private static final Set<Class<? extends HandledScreen<?>>> CRAFTING_GUIS = new HashSet<>();
+    private static final Map<CraftingOutputSlot, SlotRange> CRAFTING_GRID_SLOTS = new HashMap<>();
+    private static final Set<Class<? extends AbstractContainerScreen<?>>> CRAFTING_GUIS = new HashSet<>();
 
     public static void clearDefinitions()
     {
@@ -27,7 +27,7 @@ public class CraftingHandler
     {
         try
         {
-            Class<? extends HandledScreen<?>> guiClass = (Class<? extends HandledScreen<?>>) Class.forName(guiClassName);
+            Class<? extends AbstractContainerScreen<?>> guiClass = (Class<? extends AbstractContainerScreen<?>>) Class.forName(guiClassName);
             Class<? extends Slot> slotClass = (Class<? extends Slot>) Class.forName(slotClassName);
 
             CRAFTING_GRID_SLOTS.put(new CraftingOutputSlot(guiClass, slotClass, outputSlot), range);
@@ -37,8 +37,8 @@ public class CraftingHandler
         }
         catch (Exception e)
         {
-            ItemScroller.logger.warn("addCraftingGridDefinition(): Failed to find classes for grid definition: gui: '{}', slot: '{}', outputSlot: {}",
-                    guiClassName, slotClassName, outputSlot);
+            ItemScroller.LOGGER.warn("addCraftingGridDefinition(): Failed to find classes for grid definition: gui: '{}', slot: '{}', outputSlot: {}",
+                                     guiClassName, slotClassName, outputSlot);
         }
 
         return false;
@@ -46,27 +46,28 @@ public class CraftingHandler
 
     public static boolean isCraftingGui(Screen gui)
     {
-        return (gui instanceof HandledScreen) && CRAFTING_GUIS.contains(((HandledScreen<?>) gui).getClass());
+        return (gui instanceof AbstractContainerScreen) && CRAFTING_GUIS.contains(((AbstractContainerScreen<?>) gui).getClass());
     }
 
     /**
      * Gets the crafting grid SlotRange associated with the given slot in the given gui, if any.
-     * @param gui
-     * @param slot
+     *
+     * @param gui  ()
+     * @param slot ()
      * @return the SlotRange of the crafting grid, or null, if the given slot is not a crafting output slot
      */
     @Nullable
-    public static SlotRange getCraftingGridSlots(HandledScreen<?> gui, Slot slot)
+    public static SlotRange getCraftingGridSlots(AbstractContainerScreen<?> gui, Slot slot)
     {
         return CRAFTING_GRID_SLOTS.get(CraftingOutputSlot.from(gui, slot));
     }
 
     @Nullable
-    public static Slot getFirstCraftingOutputSlotForGui(HandledScreen<? extends ScreenHandler> gui)
+    public static Slot getFirstCraftingOutputSlotForGui(AbstractContainerScreen<? extends AbstractContainerMenu> gui)
     {
         if (CRAFTING_GUIS.contains(gui.getClass()))
         {
-            for (Slot slot : gui.getScreenHandler().slots)
+            for (Slot slot : gui.getMenu().slots)
             {
                 if (getCraftingGridSlots(gui, slot) != null)
                 {
@@ -80,11 +81,11 @@ public class CraftingHandler
 
     public static class CraftingOutputSlot
     {
-        private final Class<? extends HandledScreen<?>> guiClass;
+        private final Class<? extends AbstractContainerScreen<?>> guiClass;
         private final Class<? extends Slot> slotClass;
         private final int outputSlot;
 
-        private CraftingOutputSlot (Class<? extends HandledScreen<?>> guiClass, Class<? extends Slot> slotClass, int outputSlot)
+        private CraftingOutputSlot(Class<? extends AbstractContainerScreen<?>> guiClass, Class<? extends Slot> slotClass, int outputSlot)
         {
             this.guiClass = guiClass;
             this.slotClass = slotClass;
@@ -92,12 +93,12 @@ public class CraftingHandler
         }
 
         @SuppressWarnings("unchecked")
-        public static CraftingOutputSlot from(HandledScreen<?> gui, Slot slot)
+        public static CraftingOutputSlot from(AbstractContainerScreen<?> gui, Slot slot)
         {
-            return new CraftingOutputSlot((Class<? extends HandledScreen<?>>) gui.getClass(), slot.getClass(), slot.id);
+            return new CraftingOutputSlot((Class<? extends AbstractContainerScreen<?>>) gui.getClass(), slot.getClass(), slot.index);
         }
 
-        public Class<? extends HandledScreen<?>> getGuiClass()
+        public Class<? extends AbstractContainerScreen<?>> getGuiClass()
         {
             return this.guiClass;
         }
@@ -112,7 +113,7 @@ public class CraftingHandler
             return this.outputSlot;
         }
 
-        public boolean matches(HandledScreen<?> gui, Slot slot, int outputSlot)
+        public boolean matches(AbstractContainerScreen<?> gui, Slot slot, int outputSlot)
         {
             return outputSlot == this.outputSlot && gui.getClass() == this.guiClass && slot.getClass() == this.slotClass;
         }
@@ -132,29 +133,38 @@ public class CraftingHandler
         public boolean equals(Object obj)
         {
             if (this == obj)
+            {
                 return true;
+            }
             if (obj == null)
+            {
                 return false;
+            }
             if (getClass() != obj.getClass())
+            {
                 return false;
+            }
             CraftingOutputSlot other = (CraftingOutputSlot) obj;
             if (guiClass == null)
             {
                 if (other.guiClass != null)
+                {
                     return false;
+                }
             }
             else if (guiClass != other.guiClass)
+            {
                 return false;
+            }
             if (outputSlot != other.outputSlot)
+            {
                 return false;
+            }
             if (slotClass == null)
             {
-                if (other.slotClass != null)
-                    return false;
+                return other.slotClass == null;
             }
-            else if (slotClass != other.slotClass)
-                return false;
-            return true;
+            else return slotClass == other.slotClass;
         }
 
     }

@@ -1,19 +1,22 @@
 {
 	"schemaVersion": 1,
 	"id": "itemscroller",
-	"name": "Item Scroller",
+	"name": "Item Scroller (Craftfix)",
 	"version": "${mod_version}",
 
-	"description": "Move items in inventory GUIs by scrolling the mouse wheel or dragging over slots",
+	"description": "Craftfix fork: fast mass crafting via recipe book protocol, toggleable mass craft, and inventory scrolling helpers for 1.21.11",
 	"authors": [
-		"masa"
+		"masa",
+		"Andrews54757"
+	],
+	"contributors": [
+		"Sakura-Ryoko",
+		"trolle6"
 	],
 	"contact": {
-		"homepage": "https://www.curseforge.com/minecraft/mc-mods/item-scroller",
-		"issues": "https://github.com/maruohon/itemscroller/issues",
-		"sources": "https://github.com/maruohon/itemscroller",
-		"twitter": "https://twitter.com/maruohon",
-		"discord": "https://discordapp.com/channels/211786369951989762/453662800460644354/"
+		"homepage": "https://github.com/trolle6/itemscroller-crafting-fix-trolle",
+		"issues": "https://github.com/trolle6/itemscroller-crafting-fix-trolle/issues",
+		"sources": "https://github.com/trolle6/itemscroller-crafting-fix-trolle"
 	},
 
 	"license": "LGPLv3",
@@ -31,9 +34,13 @@
 	"mixins": [
 		"mixins.itemscroller.json"
 	],
+	"accessWidener": "itemscroller.accesswidener",
 
 	"depends": {
-		"minecraft": ">=1.21",
-		"malilib": ">=0.20.0"
+		"minecraft": "1.21.11",
+		"malilib": ">=0.27.11- <0.28.0-"
+	},
+	"breaks": {
+		"malilib": "<0.27.11-"
 	}
 }

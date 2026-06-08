@@ -1,29 +1,32 @@
 package fi.dy.masa.itemscroller.recipes;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import javax.annotation.Nonnull;
-
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.nbt.NbtSizeTracker;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.screen.slot.Slot;
-
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
+import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import fi.dy.masa.malilib.util.FileUtils;
+import fi.dy.masa.malilib.util.StringUtils;
+import fi.dy.masa.malilib.util.data.Constants;
+import fi.dy.masa.malilib.util.data.tag.CompoundData;
+import fi.dy.masa.malilib.util.data.tag.ListData;
+import fi.dy.masa.malilib.util.data.tag.util.DataFileUtils;
+import fi.dy.masa.malilib.util.game.RecipeBookUtils;
 import fi.dy.masa.itemscroller.ItemScroller;
 import fi.dy.masa.itemscroller.Reference;
 import fi.dy.masa.itemscroller.config.Configs;
-import fi.dy.masa.itemscroller.util.Constants;
-import fi.dy.masa.malilib.util.FileUtils;
-import fi.dy.masa.malilib.util.StringUtils;
 
 public class RecipeStorage
 {
-    private static final RecipeStorage INSTANCE = new RecipeStorage(8 * 18);
-
+    private static final int MAX_PAGES   = 8;           // 8 Pages of 18 = 144 total slots
+    private static final int MAX_RECIPES = 18;          // 8 Pages of 18 = 144 total slots
+    private static final RecipeStorage INSTANCE = new RecipeStorage(MAX_RECIPES * MAX_PAGES);
     private final RecipePattern[] recipes;
     private int selected;
     private boolean dirty;
@@ -39,11 +42,27 @@ public class RecipeStorage
         this.initRecipes();
     }
 
+    public void reset(boolean isLogout)
+    {
+        if (isLogout)
+        {
+            this.clearRecipes();
+        }
+    }
+
     private void initRecipes()
     {
         for (int i = 0; i < this.recipes.length; i++)
         {
             this.recipes[i] = new RecipePattern();
+        }
+    }
+
+    private void clearRecipes()
+    {
+        for (int i = 0; i < this.recipes.length; i++)
+        {
+            this.clearRecipe(i);
         }
     }
 
@@ -78,7 +97,7 @@ public class RecipeStorage
 
     public int getRecipeCountPerPage()
     {
-        return 18;
+        return MAX_RECIPES;
     }
 
     public int getCurrentRecipePage()
@@ -107,14 +126,14 @@ public class RecipeStorage
         return this.getRecipe(this.getSelection());
     }
 
-    public void storeCraftingRecipeToCurrentSelection(Slot slot, HandledScreen<?> gui, boolean clearIfEmpty)
+    public void storeCraftingRecipeToCurrentSelection(Slot slot, AbstractContainerScreen<?> gui, boolean clearIfEmpty, boolean fromKeybind, Minecraft mc)
     {
-        this.storeCraftingRecipe(this.getSelection(), slot, gui, clearIfEmpty);
+        this.storeCraftingRecipe(this.getSelection(), slot, gui, clearIfEmpty, fromKeybind, mc);
     }
 
-    public void storeCraftingRecipe(int index, Slot slot, HandledScreen<?> gui, boolean clearIfEmpty)
+    public void storeCraftingRecipe(int index, Slot slot, AbstractContainerScreen<?> gui, boolean clearIfEmpty, boolean fromKeybind, Minecraft mc)
     {
-        this.getRecipe(index).storeCraftingRecipe(slot, gui, clearIfEmpty);
+        this.getRecipe(index).storeCraftingRecipe(slot, gui, clearIfEmpty, fromKeybind, mc);
         this.dirty = true;
     }
 
@@ -124,9 +143,66 @@ public class RecipeStorage
         this.dirty = true;
     }
 
-    private void readFromNBT(NbtCompound nbt, DynamicRegistryManager registryManager)
+    private boolean isEmpty()
     {
-        if (nbt == null || nbt.contains("Recipes", Constants.NBT.TAG_LIST) == false)
+        return !(this.recipes.length > 0) || this.isRecipesEmpty();
+    }
+
+    private boolean isRecipesEmpty()
+    {
+        boolean empty = true;
+
+	    for (RecipePattern recipe : this.recipes)
+	    {
+		    if (!recipe.isEmpty())
+		    {
+			    empty = false;
+		    }
+	    }
+
+        return empty;
+    }
+
+    public void onAddToRecipeBook(RecipeDisplayEntry entry)
+    {
+        Minecraft mc = Minecraft.getInstance();
+
+        // DEBUG
+//        RecipeBookUtils.toggleDebugLog(true);
+//        RecipeBookUtils.toggleAnsiColorLog(true);
+
+        for (RecipePattern recipe : this.recipes)
+        {
+            if (!recipe.isEmpty())
+            {
+                List<RecipeBookUtils.Type> types;
+
+                if (recipe.getRecipeType() != null)
+                {
+                    types = List.of(recipe.getRecipeType());
+                }
+                else
+                {
+                    types = List.of(RecipeBookUtils.Type.SHAPED, RecipeBookUtils.Type.SHAPELESS);
+                }
+
+                if (RecipeBookUtils.matchClientRecipeBookEntry(recipe.getResult(), Arrays.asList(recipe.getRecipeItems()), entry, types, mc))
+//                if (recipe.matchClientRecipeBookEntry(entry, mc))
+                {
+                    ItemScroller.debugLog("onAddToRecipeBook(): Positive Match for result stack: [{}] networkId [{}]", recipe.getResult().toString(), entry.id().index());
+                    recipe.storeNetworkRecipeId(entry.id());
+                    recipe.storeRecipeCategory(entry.category());
+                    recipe.storeRecipeDisplayEntry(entry);
+                    recipe.storeRecipeType(RecipeBookUtils.Type.fromRecipeDisplay(entry.display()));
+                    break;
+                }
+            }
+        }
+    }
+
+    private void readFromNBT(CompoundData data, @Nonnull RegistryAccess registryManager)
+    {
+        if (data == null || data.contains("Recipes", Constants.NBT.TAG_LIST) == false)
         {
             return;
         }
@@ -136,43 +212,93 @@ public class RecipeStorage
             this.recipes[i].clearRecipe();
         }
 
-        NbtList tagList = nbt.getList("Recipes", Constants.NBT.TAG_COMPOUND);
+        ListData tagList = data.getList("Recipes");
         int count = tagList.size();
 
         for (int i = 0; i < count; i++)
         {
-            NbtCompound tag = tagList.getCompound(i);
+	        CompoundData tag = tagList.getCompoundAt(i);
 
             int index = tag.getByte("RecipeIndex");
 
             if (index >= 0 && index < this.recipes.length)
             {
-                this.recipes[index].readFromNBT(tag, registryManager);
+                this.recipes[index].readFromData(tag, registryManager);
+
+                if (tag.contains("RecipeCategory", Constants.NBT.TAG_STRING))
+                {
+                    this.recipes[index].storeRecipeCategory(RecipeBookUtils.getRecipeCategoryFromId(tag.getString("RecipeCategory")));
+                }
+                if (tag.contains("LastNetworkId", Constants.NBT.TAG_INT))
+                {
+                    this.recipes[index].storeNetworkRecipeId(new RecipeDisplayId(tag.getInt("LastNetworkId")));
+                }
+                if (tag.contains("RecipeType", Constants.NBT.TAG_STRING))
+                {
+                    String recipeType = tag.getString("RecipeType");
+
+                    if (!recipeType.isEmpty())
+                    {
+                        for (RecipeBookUtils.Type type : RecipeBookUtils.Type.values())
+                        {
+                            if (type.name().equalsIgnoreCase(recipeType))
+                            {
+                                this.recipes[index].storeRecipeType(type);
+                            }
+                        }
+                    }
+
+                }
             }
         }
 
-        this.changeSelectedRecipe(nbt.getByte("Selected"));
+        this.changeSelectedRecipe(data.getByte("Selected"));
     }
 
-    private NbtCompound writeToNBT(DynamicRegistryManager registryManager)
+    private CompoundData writeToNBT(@Nonnull RegistryAccess registry)
     {
-        NbtList tagRecipes = new NbtList();
-        NbtCompound nbt = new NbtCompound();
+        ListData tagRecipes = new ListData();
+        CompoundData data = new CompoundData();
+
+        if (this.isEmpty())
+        {
+            return data;
+        }
 
         for (int i = 0; i < this.recipes.length; i++)
         {
             if (this.recipes[i].isValid())
             {
-                NbtCompound tag = this.recipes[i].writeToNBT(registryManager);
+                RecipePattern entry = this.recipes[i];
+                CompoundData tag = entry.writeToData(registry);
                 tag.putByte("RecipeIndex", (byte) i);
+
+                if (entry.getRecipeCategory() != null)
+                {
+                    String id = RecipeBookUtils.getRecipeCategoryId(entry.getRecipeCategory());
+
+                    if (!id.isEmpty())
+                    {
+                        tag.putString("RecipeCategory", id);
+                    }
+                }
+                if (entry.getNetworkRecipeId() != null)
+                {
+                    tag.putInt("LastNetworkId", entry.getNetworkRecipeId().index());
+                }
+                if (entry.getRecipeType() != null)
+                {
+                    tag.putString("RecipeType", entry.getRecipeType().name().toLowerCase());
+                }
+
                 tagRecipes.add(tag);
             }
         }
 
-        nbt.put("Recipes", tagRecipes);
-        nbt.putByte("Selected", (byte) this.selected);
+	    data.put("Recipes", tagRecipes);
+	    data.putByte("Selected", (byte) this.selected);
 
-        return nbt;
+        return data;
     }
 
     private String getFileName()
@@ -185,75 +311,109 @@ public class RecipeStorage
             {
                 return "recipes_" + worldName + ".nbt";
             }
+            else
+            {
+                return "recipes_unknown.nbt";
+            }
         }
 
         return "recipes.nbt";
     }
 
-    private File getSaveDir()
+    private Path getSaveDirAsPath()
     {
-        return new File(FileUtils.getMinecraftDirectory(), Reference.MOD_ID);
+        return FileUtils.getMinecraftDirectoryAsPath().resolve(Reference.MOD_ID);
     }
 
-    public void readFromDisk(DynamicRegistryManager registryManager)
+    public void readFromDisk(@Nonnull RegistryAccess registry)
     {
         try
         {
-            File saveDir = this.getSaveDir();
+            Path saveDir = this.getSaveDirAsPath();
 
-            if (saveDir != null)
+            if (Files.isDirectory(saveDir))
             {
-                File file = new File(saveDir, this.getFileName());
+                Path file = saveDir.resolve(this.getFileName());
 
-                if (file.exists() && file.isFile() && file.canRead())
+                if (Files.exists(file))
                 {
-                    FileInputStream is = new FileInputStream(file);
-                    this.readFromNBT(NbtIo.readCompressed(is, NbtSizeTracker.ofUnlimitedBytes()), registryManager);
-                    is.close();
-                    //ItemScroller.logger.info("Read recipes from file '{}'", file.getPath());
+                    CompoundData nbtIn = DataFileUtils.readCompoundDataFromNbtFile(file);
+
+                    if (nbtIn != null && !nbtIn.isEmpty())
+                    {
+                        this.initRecipes();
+                        this.readFromNBT(nbtIn, registry);
+
+                        //ItemScroller.debugLog("readFromDisk(): Successfully loaded recipe's from file '{}'", file.toAbsolutePath());
+                    }
+                    else
+                    {
+                        ItemScroller.LOGGER.warn("readFromDisk(): Error reading recipes from file '{}'", file.toAbsolutePath());
+                    }
                 }
+                // File does not exist
+            }
+            else
+            {
+                ItemScroller.LOGGER.warn("readFromDisk(): Error reading recipes saveDir '{}'", saveDir.toAbsolutePath());
             }
         }
         catch (Exception e)
         {
-            ItemScroller.logger.warn("Failed to read recipes from file", e);
+            ItemScroller.LOGGER.warn("readFromDisk(): Failed to read recipes from file", e);
         }
     }
 
-    public void writeToDisk(DynamicRegistryManager registryManager)
+    public void writeToDisk(@Nonnull RegistryAccess registry)
     {
         if (this.dirty)
         {
             try
             {
-                File saveDir = this.getSaveDir();
+                Path saveDir = this.getSaveDirAsPath();
 
-                if (saveDir.exists() == false)
+                if (!Files.exists(saveDir))
                 {
-                    if (saveDir.mkdirs() == false)
+                    FileUtils.createDirectoriesIfMissing(saveDir);
+                    //ItemScroller.debugLog("writeToDisk(): Creating directory '{}'.", saveDir.toAbsolutePath());
+                }
+
+                if (Files.isDirectory(saveDir))
+                {
+                    Path fileTmp = saveDir.resolve(this.getFileName() + ".tmp");
+                    Path fileReal = saveDir.resolve(this.getFileName());
+
+//                    NbtUtils.writeCompressed(this.writeToNBT(registry), fileTmp);
+	                CompoundData data = this.writeToNBT(registry);
+
+                    // Don't save a file if there are no recipe's to save.
+                    if (data.isEmpty())
                     {
-                        ItemScroller.logger.warn("Failed to create the recipe storage directory '{}'", saveDir.getPath());
+                        if (Files.exists(fileReal))
+                        {
+                            Files.delete(fileReal);
+                        }
+
+                        this.dirty = false;
                         return;
                     }
+
+	                DataFileUtils.writeCompoundDataToCompressedNbtFile(fileTmp, data);
+
+                    if (Files.exists(fileReal))
+                    {
+                        Files.delete(fileReal);
+                    }
+
+                    Files.move(fileTmp, fileReal);
+
+                    //ItemScroller.debugLog("writeToDisk(): Successfully saved recipes file '{}'", fileReal.toAbsolutePath());
+                    this.dirty = false;
                 }
-
-                File fileTmp  = new File(saveDir, this.getFileName() + ".tmp");
-                File fileReal = new File(saveDir, this.getFileName());
-                FileOutputStream os = new FileOutputStream(fileTmp);
-                NbtIo.writeCompressed(this.writeToNBT(registryManager), os);
-                os.close();
-
-                if (fileReal.exists())
-                {
-                    fileReal.delete();
-                }
-
-                fileTmp.renameTo(fileReal);
-                this.dirty = false;
             }
             catch (Exception e)
             {
-                ItemScroller.logger.warn("Failed to write recipes to file!", e);
+                ItemScroller.LOGGER.warn("writeToDisk(): Failed to write recipes to file!", e);
             }
         }
     }

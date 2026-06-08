@@ -1,28 +1,20 @@
 package fi.dy.masa.itemscroller.util;
 
+import javax.annotation.Nonnull;
+import net.minecraft.world.item.ItemStack;
 import java.util.HashMap;
 import java.util.Map;
-import javax.annotation.Nonnull;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-
-import net.minecraft.item.ItemStack;
 
 /**
  * Wrapper class for ItemStack, which implements equals()
  * for the item, damage and NBT, but not stackSize.
  */
-public class ItemType
+public record ItemType(ItemStack stack)
 {
-    private final ItemStack stack;
-
     public ItemType(@Nonnull ItemStack stack)
     {
-        this.stack = stack.copy();
-    }
-
-    public ItemStack getStack()
-    {
-        return this.stack;
+        this.stack = stack.isEmpty() ? InventoryUtils.EMPTY_STACK : InventoryUtils.copyStack(stack, false);
     }
 
     @Override
@@ -48,13 +40,14 @@ public class ItemType
 
         ItemType other = (ItemType) obj;
 
-        return ItemStack.areItemsAndComponentsEqual(this.stack, other.stack);
+        return ItemStack.isSameItemSameComponents(this.stack, other.stack);
     }
 
     /**
      * Returns a map that has a list of the indices for each different item in the input list
-     * @param stacks
-     * @return
+     *
+     * @param stacks ()
+     * @return ()
      */
     public static Map<ItemType, IntArrayList> getSlotsPerItem(ItemStack[] stacks)
     {

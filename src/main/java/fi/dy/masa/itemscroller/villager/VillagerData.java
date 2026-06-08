@@ -2,11 +2,12 @@ package fi.dy.masa.itemscroller.villager;
 
 import java.util.UUID;
 import javax.annotation.Nullable;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtInt;
-import net.minecraft.nbt.NbtList;
-import fi.dy.masa.itemscroller.util.Constants;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+
+import fi.dy.masa.malilib.util.data.Constants;
+import fi.dy.masa.malilib.util.data.tag.CompoundData;
+import fi.dy.masa.malilib.util.data.tag.IntData;
+import fi.dy.masa.malilib.util.data.tag.ListData;
 
 public class VillagerData
 {
@@ -51,33 +52,43 @@ public class VillagerData
         return this.favorites;
     }
 
-    public NbtCompound toNBT()
+    protected boolean isEmpty()
     {
-        NbtCompound tag = new NbtCompound();
+        return this.favorites.isEmpty();
+    }
 
-        tag.putLong("UUIDM", this.uuid.getMostSignificantBits());
-        tag.putLong("UUIDL", this.uuid.getLeastSignificantBits());
-        tag.putInt("ListPosition", this.tradeListPosition);
+    public CompoundData toNBT()
+    {
+	    CompoundData data = new CompoundData();
 
-        NbtList tagList = new NbtList();
+        if (this.isEmpty())
+        {
+            return data;
+        }
+
+	    data.putLong("UUIDM", this.uuid.getMostSignificantBits());
+	    data.putLong("UUIDL", this.uuid.getLeastSignificantBits());
+	    data.putInt("ListPosition", this.tradeListPosition);
+
+        ListData tagList = new ListData();
 
         for (Integer val : this.favorites)
         {
-            tagList.add(NbtInt.of(val));
+            tagList.add(new IntData(val));
         }
 
-        tag.put("Favorites", tagList);
+	    data.put("Favorites", tagList);
 
-        return tag;
+        return data;
     }
 
     @Nullable
-    public static VillagerData fromNBT(NbtCompound tag)
+    public static VillagerData fromNBT(CompoundData tag)
     {
         if (tag.contains("UUIDM", Constants.NBT.TAG_LONG) && tag.contains("UUIDL", Constants.NBT.TAG_LONG))
         {
             VillagerData data = new VillagerData(new UUID(tag.getLong("UUIDM"), tag.getLong("UUIDL")));
-            NbtList tagList = tag.getList("Favorites", Constants.NBT.TAG_INT);
+            ListData tagList = tag.getList("Favorites");
             final int count = tagList.size();
 
             data.favorites.clear();
@@ -85,7 +96,7 @@ public class VillagerData
 
             for (int i = 0; i < count; ++i)
             {
-                data.favorites.add(tagList.getInt(i));
+                data.favorites.add(tagList.getIntAt(i));
             }
 
             return data;

@@ -1,12 +1,12 @@
 package fi.dy.masa.itemscroller.event;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
-import net.minecraft.client.gui.screen.ingame.HandledScreen;
-import net.minecraft.recipe.CraftingRecipe;
-import net.minecraft.recipe.RecipeEntry;
-import net.minecraft.screen.slot.Slot;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+
 import fi.dy.masa.malilib.config.options.ConfigHotkey;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.gui.Message;
@@ -17,166 +17,427 @@ import fi.dy.masa.malilib.hotkeys.KeyCallbackToggleBooleanConfigWithMessage;
 import fi.dy.masa.malilib.interfaces.IClientTickHandler;
 import fi.dy.masa.malilib.util.GuiUtils;
 import fi.dy.masa.malilib.util.InfoUtils;
+import fi.dy.masa.malilib.util.MathUtils;
 import fi.dy.masa.itemscroller.ItemScroller;
 import fi.dy.masa.itemscroller.config.Configs;
 import fi.dy.masa.itemscroller.config.Hotkeys;
 import fi.dy.masa.itemscroller.gui.GuiConfigs;
+import fi.dy.masa.itemscroller.mixin.recipe.IMixinCraftingResultSlot;
 import fi.dy.masa.itemscroller.recipes.CraftingHandler;
 import fi.dy.masa.itemscroller.recipes.RecipePattern;
 import fi.dy.masa.itemscroller.recipes.RecipeStorage;
-import fi.dy.masa.itemscroller.util.AccessorUtils;
-import fi.dy.masa.itemscroller.util.InputUtils;
-import fi.dy.masa.itemscroller.util.InventoryUtils;
-import fi.dy.masa.itemscroller.util.MoveAction;
+import fi.dy.masa.itemscroller.util.*;
 
-public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler {
+public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
+{
     private static final KeybindCallbacks INSTANCE = new KeybindCallbacks();
-
-    protected int massCraftTicker;
-
-    public static KeybindCallbacks getInstance() {
+    public static KeybindCallbacks getInstance()
+    {
         return INSTANCE;
     }
 
-    private KeybindCallbacks() {
+    protected int massCraftTicker;
+    private long badRecipeClicks;
+
+    private KeybindCallbacks()
+    {
+        this.badRecipeClicks = 0L;
     }
 
-    public void setCallbacks() {
-        for (ConfigHotkey hotkey : Hotkeys.HOTKEY_LIST) {
+    public void setCallbacks()
+    {
+        for (ConfigHotkey hotkey : Hotkeys.HOTKEY_LIST)
+        {
             hotkey.getKeybind().setCallback(this);
         }
 
-        Hotkeys.MASS_CRAFT_TOGGLE.getKeybind()
-                .setCallback(new KeyCallbackToggleBooleanConfigWithMessage(Configs.Generic.MASS_CRAFT_HOLD));
+        Hotkeys.MASS_CRAFT_TOGGLE.getKeybind().setCallback(new KeyCallbackToggleBooleanConfigWithMessage(Configs.Generic.MASS_CRAFT_HOLD));
     }
 
-    public boolean functionalityEnabled() {
+    public boolean functionalityEnabled()
+    {
         return Configs.Generic.MOD_MAIN_TOGGLE.getBooleanValue();
     }
 
     @Override
-    public boolean onKeyAction(KeyAction action, IKeybind key) {
+    public boolean onKeyAction(KeyAction action, IKeybind key)
+    {
+        if (Configs.Generic.RATE_LIMIT_CLICK_PACKETS.getBooleanValue())
+        {
+            ClickPacketBuffer.setShouldBufferClickPackets(true);
+        }
+
         boolean cancel = this.onKeyActionImpl(action, key);
+
+        ClickPacketBuffer.setShouldBufferClickPackets(false);
+
         return cancel;
     }
 
-    private boolean onKeyActionImpl(KeyAction action, IKeybind key) {
-        MinecraftClient mc = MinecraftClient.getInstance();
+    private boolean onKeyActionImpl(KeyAction action, IKeybind key)
+    {
+        Minecraft mc = Minecraft.getInstance();
 
-        if (mc.player == null || mc.world == null) {
+        if (mc.player == null || mc.level == null)
+        {
             return false;
         }
 
-        if (key == Hotkeys.TOGGLE_MOD_ON_OFF.getKeybind()) {
+        if (key == Hotkeys.TOGGLE_MOD_ON_OFF.getKeybind())
+        {
             Configs.Generic.MOD_MAIN_TOGGLE.toggleBooleanValue();
-            String msg = this.functionalityEnabled() ? "itemscroller.message.toggled_mod_on"
-                    : "itemscroller.message.toggled_mod_off";
+            String msg = this.functionalityEnabled() ? "itemscroller.message.toggled_mod_on" : "itemscroller.message.toggled_mod_off";
             InfoUtils.showGuiOrInGameMessage(Message.MessageType.INFO, msg);
             return true;
-        } else if (key == Hotkeys.OPEN_CONFIG_GUI.getKeybind()) {
+        }
+        else if (key == Hotkeys.OPEN_CONFIG_GUI.getKeybind())
+        {
             GuiBase.openGui(new GuiConfigs());
             return true;
         }
 
         if (this.functionalityEnabled() == false ||
-                (GuiUtils.getCurrentScreen() instanceof HandledScreen) == false ||
-                Configs.GUI_BLACKLIST.contains(GuiUtils.getCurrentScreen().getClass().getName())) {
+            (GuiUtils.getCurrentScreen() instanceof AbstractContainerScreen) == false ||
+            Configs.GUI_BLACKLIST.contains(GuiUtils.getCurrentScreen().getClass().getName()))
+        {
             return false;
         }
 
-        HandledScreen<?> gui = (HandledScreen<?>) GuiUtils.getCurrentScreen();
+        AbstractContainerScreen<?> gui = (AbstractContainerScreen<?>) GuiUtils.getCurrentScreen();
         Slot slot = AccessorUtils.getSlotUnderMouse(gui);
         RecipeStorage recipes = RecipeStorage.getInstance();
         MoveAction moveAction = InputUtils.getDragMoveAction(key);
 
-        if (slot != null) {
-            if (moveAction != MoveAction.NONE) {
+        if (slot != null)
+        {
+            if (moveAction != MoveAction.NONE)
+            {
                 final int mouseX = fi.dy.masa.malilib.util.InputUtils.getMouseX();
                 final int mouseY = fi.dy.masa.malilib.util.InputUtils.getMouseY();
                 return InventoryUtils.dragMoveItems(gui, moveAction, mouseX, mouseY, true);
-            } else if (key == Hotkeys.KEY_MOVE_EVERYTHING.getKeybind()) {
+            }
+            else if (key == Hotkeys.KEY_MOVE_EVERYTHING.getKeybind())
+            {
                 InventoryUtils.tryMoveStacks(slot, gui, false, true, false);
                 return true;
-            } else if (key == Hotkeys.DROP_ALL_MATCHING.getKeybind()) {
+            }
+            else if (key == Hotkeys.DROP_ALL_MATCHING.getKeybind())
+            {
                 if (Configs.Toggles.DROP_MATCHING.getBooleanValue() &&
-                        Configs.GUI_BLACKLIST.contains(gui.getClass().getName()) == false &&
-                        slot.hasStack()) {
-                    InventoryUtils.dropStacks(gui, slot.getStack(), slot, true);
+                    Configs.GUI_BLACKLIST.contains(gui.getClass().getName()) == false &&
+                    slot.hasItem())
+                {
+                    InventoryUtils.dropStacks(gui, slot.getItem(), slot, true);
                     return true;
                 }
             }
         }
 
-        if (key == Hotkeys.CRAFT_EVERYTHING.getKeybind()) {
+        if (key == Hotkeys.CRAFT_EVERYTHING.getKeybind())
+        {
             InventoryUtils.craftEverythingPossibleWithCurrentRecipe(recipes.getSelectedRecipe(), gui);
             return true;
-        } else if (key == Hotkeys.THROW_CRAFT_RESULTS.getKeybind()) {
+        }
+        else if (key == Hotkeys.THROW_CRAFT_RESULTS.getKeybind())
+        {
             InventoryUtils.throwAllCraftingResultsToGround(recipes.getSelectedRecipe(), gui);
             return true;
-        } else if (key == Hotkeys.MOVE_CRAFT_RESULTS.getKeybind()) {
+        }
+        else if (key == Hotkeys.MOVE_CRAFT_RESULTS.getKeybind())
+        {
             InventoryUtils.moveAllCraftingResultsToOtherInventory(recipes.getSelectedRecipe(), gui);
             return true;
-        } else if (key == Hotkeys.STORE_RECIPE.getKeybind()) {
-            if (InputUtils.isRecipeViewOpen() && InventoryUtils.isCraftingSlot(gui, slot)) {
-                recipes.storeCraftingRecipeToCurrentSelection(slot, gui, true);
+        }
+        else if (key == Hotkeys.STORE_RECIPE.getKeybind())
+        {
+            if (InputUtils.isRecipeViewOpen() && InventoryUtils.isCraftingSlot(gui, slot))
+            {
+                recipes.storeCraftingRecipeToCurrentSelection(slot, gui, true, true, mc);
                 return true;
             }
-        } else if (key == Hotkeys.VILLAGER_TRADE_FAVORITES.getKeybind()) {
+        }
+        else if (key == Hotkeys.VILLAGER_TRADE_FAVORITES.getKeybind())
+        {
             return InventoryUtils.villagerTradeEverythingPossibleWithAllFavoritedTrades();
-        } else if (key == Hotkeys.SLOT_DEBUG.getKeybind()) {
-            if (slot != null) {
+        }
+        else if (key == Hotkeys.SLOT_DEBUG.getKeybind())
+        {
+            if (slot != null)
+            {
                 InventoryUtils.debugPrintSlotInfo(gui, slot);
-            } else {
-                ItemScroller.logger.info("GUI class: {}", gui.getClass().getName());
+            }
+            else
+            {
+                ItemScroller.LOGGER.info("GUI class: {}", gui.getClass().getName());
             }
 
             return true;
+        }
+        else if (key == Hotkeys.SORT_INVENTORY.getKeybind())
+        {
+            if (Configs.Generic.SORT_INVENTORY_TOGGLE.getBooleanValue())
+            {
+                InventoryUtils.sortInventory(gui);
+                return true;
+            }
         }
 
         return false;
     }
 
     @Override
-    public void onClientTick(MinecraftClient mc) {
-        if (this.functionalityEnabled() == false || mc.player == null) {
+    public void onClientTick(Minecraft mc)
+    {
+        if (InventoryUtils.dontUpdateRecipeBook > 0)
+        {
+            --InventoryUtils.dontUpdateRecipeBook;
+        }
+
+        if (this.functionalityEnabled() == false ||
+	        mc.gameMode == null || mc.player == null || mc.level == null)
+        {
             return;
         }
 
-        if (GuiUtils.getCurrentScreen() instanceof HandledScreen
-                && (GuiUtils.getCurrentScreen() instanceof CreativeInventoryScreen) == false
-                && Configs.GUI_BLACKLIST.contains(GuiUtils.getCurrentScreen().getClass().getName()) == false
-                && (Hotkeys.MASS_CRAFT.getKeybind().isKeybindHeld()
-                        || Configs.Generic.MASS_CRAFT_HOLD.getBooleanValue())) {
+        ClickPacketBuffer.sendBufferedPackets(Configs.Generic.PACKET_RATE_LIMIT.getIntegerValue());
 
-            if (++this.massCraftTicker < Configs.Generic.MASS_CRAFT_INTERVAL.getIntegerValue()) {
+        if (ClickPacketBuffer.shouldCancelWindowClicks())
+        {
+            return;
+        }
+
+        this.onClientTickMassCraftImpl(mc);
+    }
+
+    private void onClientTickMassCraftImpl(Minecraft mc)
+    {
+        if (mc.player == null || mc.level == null) { return; }
+
+        if (GuiUtils.getCurrentScreen() instanceof AbstractContainerScreen<?> gui &&
+            (GuiUtils.getCurrentScreen() instanceof CreativeModeInventoryScreen) == false &&
+            Configs.GUI_BLACKLIST.contains(GuiUtils.getCurrentScreen().getClass().getName()) == false &&
+            (Hotkeys.MASS_CRAFT.getKeybind().isKeybindHeld() || Configs.Generic.MASS_CRAFT_HOLD.getBooleanValue()))
+        {
+            if (++this.massCraftTicker < Configs.Generic.MASS_CRAFT_INTERVAL.getIntegerValue())
+            {
                 return;
             }
 
-            Screen guiScreen = GuiUtils.getCurrentScreen();
-            HandledScreen<?> gui = (HandledScreen<?>) guiScreen;
-            Slot outputSlot = CraftingHandler.getFirstCraftingOutputSlotForGui(gui);
+            InventoryUtils.bufferInvUpdates = true;
+            final Slot outputSlot = CraftingHandler.getFirstCraftingOutputSlotForGui(gui);
 
-            if (outputSlot != null) {
-                RecipePattern recipe = RecipeStorage.getInstance().getSelectedRecipe();
-                RecipeEntry<CraftingRecipe> bookRecipe = recipe.getCraftingRecipe();
+            if (outputSlot != null)
+            {
+                final CraftingHandler.SlotRange range = CraftingHandler.getCraftingGridSlots(gui, outputSlot);
+                final RecipePattern recipe = RecipeStorage.getInstance().getSelectedRecipe();
+                final int limit = Configs.Generic.MASS_CRAFT_ITERATIONS.getIntegerValue();
 
-                if (bookRecipe != null && !bookRecipe.value().isIgnoredInRecipeBook()) { // Use recipe book if possible
-                    // System.out.println("recipe");
-                    mc.interactionManager.clickRecipe(gui.getScreenHandler().syncId, bookRecipe, true);
-                } else {
-                    // System.out.println("move");
-                    InventoryUtils.tryMoveItemsToFirstCraftingGrid(recipe, gui, true);
+                if (!recipe.getResult().isEmpty() && range != null)
+                {
+                    // Too small of a grid; Cancel.
+                    if (range.getSlotCount() < recipe.countRecipeItems())
+                    {
+                        return;
+                    }
+
+                    if (Configs.Generic.RATE_LIMIT_CLICK_PACKETS.getBooleanValue())
+                    {
+                        ClickPacketBuffer.setShouldBufferClickPackets(true);
+                    }
+
+                    if (Configs.Generic.MASS_CRAFT_RECIPE_BOOK.getBooleanValue() && recipe.getNetworkRecipeId() != null)
+                    {
+                        this.onTickRecipeBook(mc, gui, range, outputSlot, recipe, limit);
+
+                        if (this.badRecipeClicks < 0L)
+                        {
+                            this.badRecipeClicks = 0L;
+                        }
+                    }
+                    else if (Configs.Generic.MASS_CRAFT_SWAPS.getBooleanValue())
+                    {
+                        this.onTickSwapsOnly(mc, gui, range, outputSlot, recipe, limit);
+                    }
+                    else
+                    {
+                        this.onTickFallback(mc, gui, range, outputSlot, recipe, limit);
+                    }
+
+                    ClickPacketBuffer.setShouldBufferClickPackets(false);
                 }
-
-                for (int i = 0; i < recipe.getMaxCraftAmount(); i++) {
-                    InventoryUtils.dropStack(gui, outputSlot.id);
-                }
-
-                InventoryUtils.tryClearCursor(gui);
-                InventoryUtils.throwAllCraftingResultsToGround(recipe, gui);
             }
 
             this.massCraftTicker = 0;
+            InventoryUtils.bufferInvUpdates = false;
+            InventoryUtils.invUpdatesBuffer.removeIf(packet ->
+                                                     {
+                                                         packet.handle(mc.player.connection);
+                                                         return true;
+                                                     });
+        }
+        else
+        {
+            // Released Hotkey, or Wrong Screen --> Re-Zero
+            if (this.badRecipeClicks > 0L)
+            {
+                this.badRecipeClicks = 0L;
+            }
+        }
+    }
+
+    private void onTickRecipeBook(Minecraft mc,
+                                  final AbstractContainerScreen<?> gui, final CraftingHandler.SlotRange range,
+                                  final Slot outputSlot, final RecipePattern recipe,
+                                  final int limit)
+    {
+        if (mc.level == null || mc.gameMode == null ||
+            mc.player == null || recipe.getNetworkRecipeId() == null)
+        {
+            return;
+        }
+
+        final int badLimit = Configs.Generic.RECIPE_BOOK_FAILURE_LIMIT.getIntegerValue();
+
+        if (badLimit > 0)
+        {
+            if (this.badRecipeClicks > badLimit)
+            {
+                // Allow an iteration for next tick; so we don't lock the mass Craft.
+                this.badRecipeClicks -= MathUtils.max((badLimit / 16), 1);
+                return;
+            }
+        }
+
+        InventoryUtils.dontUpdateRecipeBook = 2;
+
+        for (int i = 0; i < limit; i++)
+        {
+            //InventoryUtils.setInhibitCraftingOutputUpdate(true);
+            CraftingContainer craftingInv = ((IMixinCraftingResultSlot) outputSlot).itemscroller_getCraftingInventory();
+
+            if (recipe.getVanillaRecipe() != null && !recipe.getVanillaRecipe().matches(craftingInv.asCraftInput(), mc.level))
+            {
+                if (range == null) { return; }
+                final int invSlots = gui.getMenu().slots.size();
+                final int rangeSlots = range.getSlotCount();
+
+                for (int j = 0, slotNum = range.getFirst(); j < rangeSlots && slotNum < invSlots; j++, slotNum++)
+                {
+                    InventoryUtils.shiftClickSlot(gui, slotNum);
+                    Slot slotTmp = gui.getMenu().getSlot(slotNum);
+                    ItemStack stack = slotTmp.getItem();
+
+                    if (!stack.isEmpty())
+                    {
+                        InventoryUtils.dropStack(gui, slotNum);
+                    }
+                }
+            }
+
+            // Yeet packet
+            mc.gameMode.handlePlaceRecipe(gui.getMenu().containerId, recipe.getNetworkRecipeId(), true);
+//            InventoryUtils.setInhibitCraftingOutputUpdate(false);
+//            InventoryUtils.updateCraftingOutputSlot(outputSlot);
+            craftingInv = ((IMixinCraftingResultSlot) outputSlot).itemscroller_getCraftingInventory();
+
+            if (recipe.getVanillaRecipe() != null && recipe.getVanillaRecipe().matches(craftingInv.asCraftInput(), mc.level))
+            {
+                break;
+            }
+            else if (!InventoryUtils.areStacksEqual(outputSlot.getItem(), recipe.getResult()))
+            {
+                this.badRecipeClicks++;
+
+                if (badLimit > 0)
+                {
+                    if (this.badRecipeClicks > badLimit)
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // Successful Click, reduce burden.
+                this.badRecipeClicks -= MathUtils.max((badLimit / 8), 1);
+            }
+
+            InventoryUtils.shiftClickSlot(gui, outputSlot.index);
+            InventoryUtils.dropStack(gui, outputSlot.index);
+        }
+
+        InventoryUtils.tryClearCursor(gui);
+        InventoryUtils.throwAllCraftingResultsToGround(recipe, gui);
+    }
+
+    private void onTickSwapsOnly(Minecraft mc,
+                                 final AbstractContainerScreen<?> gui, final CraftingHandler.SlotRange range,
+                                 final Slot outputSlot, final RecipePattern recipe,
+                                 final int limit)
+    {
+        if (mc.player == null) { return; }
+
+        for (int i = 0; i < limit; ++i)
+        {
+            InventoryUtils.tryClearCursor(gui);
+            InventoryUtils.setInhibitCraftingOutputUpdate(true);
+            InventoryUtils.throwAllCraftingResultsToGround(recipe, gui);
+            InventoryUtils.throwAllNonRecipeItemsToGround(recipe, gui);
+//            CraftingContainer inv = ((IMixinCraftingResultSlot) (outputSlot)).itemscroller_getCraftingInventory();
+
+            try
+            {
+                Thread.sleep(0);
+            }
+            catch (InterruptedException ignored) { }
+
+            InventoryUtils.setCraftingGridContentsUsingSwaps(gui, mc.player.getInventory(), recipe, outputSlot);
+            InventoryUtils.setInhibitCraftingOutputUpdate(false);
+            InventoryUtils.updateCraftingOutputSlot(outputSlot);
+            //System.out.printf("Output slot: %s\n", outputSlot.getStack());
+
+            if (InventoryUtils.areStacksEqual(outputSlot.getItem(), recipe.getResult()) == false)
+            {
+                this.badRecipeClicks++;
+                break;
+            }
+
+            InventoryUtils.shiftClickSlot(gui, outputSlot.index);
+            //System.out.println("Shift clicked");
+        }
+    }
+
+    private void onTickFallback(Minecraft mc,
+                                final AbstractContainerScreen<?> gui, final CraftingHandler.SlotRange range,
+                                final Slot outputSlot, final RecipePattern recipe,
+                                final int limit)
+    {
+        int failsafe = 0;
+
+        while (++failsafe < limit)
+        {
+            InventoryUtils.tryClearCursor(gui);
+            InventoryUtils.setInhibitCraftingOutputUpdate(true);
+            InventoryUtils.throwAllCraftingResultsToGround(recipe, gui);
+            InventoryUtils.throwAllNonRecipeItemsToGround(recipe, gui);
+            InventoryUtils.tryMoveItemsToFirstCraftingGrid(recipe, gui, true);
+            InventoryUtils.setInhibitCraftingOutputUpdate(false);
+            InventoryUtils.updateCraftingOutputSlot(outputSlot);
+
+            if (InventoryUtils.areStacksEqual(outputSlot.getItem(), recipe.getResult()) == false)
+            {
+                this.badRecipeClicks++;
+                break;
+            }
+
+            if (Configs.Generic.CARPET_CTRL_Q_CRAFTING.getBooleanValue())
+            {
+                InventoryUtils.dropStack(gui, outputSlot.index);
+            }
+            else
+            {
+                InventoryUtils.dropStacksWhileHasItem(gui, outputSlot.index, recipe.getResult());
+            }
         }
     }
 }

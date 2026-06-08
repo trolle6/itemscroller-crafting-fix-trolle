@@ -1,31 +1,22 @@
 package fi.dy.masa.itemscroller.villager;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import javax.annotation.Nonnull;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
 import javax.annotation.Nullable;
+import net.minecraft.world.inventory.MerchantMenu;
+import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.item.trading.MerchantOffers;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.nbt.NbtSizeTracker;
-import net.minecraft.screen.MerchantScreenHandler;
-import net.minecraft.village.TradeOffer;
-import net.minecraft.village.TradeOfferList;
-
+import fi.dy.masa.malilib.util.FileUtils;
+import fi.dy.masa.malilib.util.StringUtils;
+import fi.dy.masa.malilib.util.data.Constants;
+import fi.dy.masa.malilib.util.data.tag.CompoundData;
+import fi.dy.masa.malilib.util.data.tag.ListData;
+import fi.dy.masa.malilib.util.data.tag.util.DataFileUtils;
 import fi.dy.masa.itemscroller.ItemScroller;
 import fi.dy.masa.itemscroller.Reference;
 import fi.dy.masa.itemscroller.config.Configs;
-import fi.dy.masa.itemscroller.util.Constants;
-import fi.dy.masa.malilib.util.FileUtils;
-import fi.dy.masa.malilib.util.StringUtils;
 
 public class VillagerDataStorage
 {
@@ -89,7 +80,7 @@ public class VillagerDataStorage
         }
     }
 
-    public void toggleGlobalFavorite(TradeOffer trade)
+    public void toggleGlobalFavorite(MerchantOffer trade)
     {
         TradeType type = TradeType.of(trade);
 
@@ -105,12 +96,12 @@ public class VillagerDataStorage
         this.dirty = true;
     }
 
-    public FavoriteData getFavoritesForCurrentVillager(MerchantScreenHandler handler)
+    public FavoriteData getFavoritesForCurrentVillager(MerchantMenu handler)
     {
-        return this.getFavoritesForCurrentVillager(((IMerchantScreenHandler) handler).getOriginalList());
+        return this.getFavoritesForCurrentVillager(((IMerchantScreenHandler) handler).itemscroller$getOriginalList());
     }
 
-    public FavoriteData getFavoritesForCurrentVillager(TradeOfferList originalTrades)
+    public FavoriteData getFavoritesForCurrentVillager(MerchantOffers originalTrades)
     {
         VillagerData data = this.getDataFor(this.lastInteractedUUID, false);
         IntArrayList favorites = data != null ? data.getFavorites() : null;
@@ -128,19 +119,19 @@ public class VillagerDataStorage
         return new FavoriteData(IntArrayList.of(), favorites == null);
     }
 
-    private void readFromNBT(NbtCompound nbt)
+    private void readFromNBT(CompoundData tags)
     {
-        if (nbt == null || nbt.contains("VillagerData", Constants.NBT.TAG_LIST) == false)
+        if (tags == null || tags.contains("VillagerData", Constants.NBT.TAG_LIST) == false)
         {
             return;
         }
 
-        NbtList tagList = nbt.getList("VillagerData", Constants.NBT.TAG_COMPOUND);
+        ListData tagList = tags.getList("VillagerData");
         int count = tagList.size();
 
         for (int i = 0; i < count; i++)
         {
-            NbtCompound tag = tagList.getCompound(i);
+	        CompoundData tag = tagList.getCompoundAt(i);
             VillagerData data = VillagerData.fromNBT(tag);
 
             if (data != null)
@@ -149,12 +140,12 @@ public class VillagerDataStorage
             }
         }
 
-        tagList = nbt.getList("GlobalFavorites", Constants.NBT.TAG_COMPOUND);
+        tagList = tags.getList("GlobalFavorites");
         count = tagList.size();
 
         for (int i = 0; i < count; i++)
         {
-            NbtCompound tag = tagList.getCompound(i);
+	        CompoundData tag = tagList.getCompoundAt(i);
             TradeType type = TradeType.fromTag(tag);
 
             if (type != null)
@@ -164,10 +155,37 @@ public class VillagerDataStorage
         }
     }
 
-    private NbtCompound writeToNBT(@Nonnull NbtCompound nbt)
+    private boolean isEmpty()
     {
-        NbtList favoriteListData = new NbtList();
-        NbtList globalFavoriteData = new NbtList();
+        return (this.data.isEmpty() || this.isVillagerDataEmpty()) && this.globalFavorites.isEmpty();
+    }
+
+    private boolean isVillagerDataEmpty()
+    {
+        boolean empty = true;
+
+        for (VillagerData data : this.data.values())
+        {
+            if (!data.isEmpty())
+            {
+                empty = false;
+            }
+        }
+
+        return empty;
+    }
+
+    private CompoundData writeToNBT()
+    {
+	    CompoundData tags = new CompoundData();
+        ListData favoriteListData = new ListData();
+	    ListData globalFavoriteData = new ListData();
+
+        if (this.isEmpty())
+        {
+            dirty = false;
+            return tags;
+        }
 
         for (VillagerData data : this.data.values())
         {
@@ -179,12 +197,12 @@ public class VillagerDataStorage
             globalFavoriteData.add(type.toTag());
         }
 
-        nbt.put("VillagerData", favoriteListData);
-        nbt.put("GlobalFavorites", globalFavoriteData);
+	    tags.put("VillagerData", favoriteListData);
+	    tags.put("GlobalFavorites", globalFavoriteData);
 
         this.dirty = false;
 
-        return nbt;
+        return tags;
     }
 
     private String getFileName()
@@ -199,9 +217,9 @@ public class VillagerDataStorage
         return "villager_data.nbt";
     }
 
-    private File getSaveDir()
+    private Path getSaveDirPath()
     {
-        return new File(FileUtils.getMinecraftDirectory(), Reference.MOD_ID);
+        return FileUtils.getMinecraftDirectoryAsPath().resolve(Reference.MOD_ID);
     }
 
     public void readFromDisk()
@@ -211,19 +229,37 @@ public class VillagerDataStorage
 
         try
         {
-            File saveDir = this.getSaveDir();
-            File file = new File(saveDir, this.getFileName());
+            Path saveDir = this.getSaveDirPath();
 
-            if (file.exists() && file.isFile() && file.canRead())
+            if (Files.isDirectory(saveDir))
             {
-                FileInputStream is = new FileInputStream(file);
-                this.readFromNBT(NbtIo.readCompressed(is, NbtSizeTracker.ofUnlimitedBytes()));
-                is.close();
+                Path file = saveDir.resolve(this.getFileName());
+
+                if (Files.exists(file))
+                {
+//                    NbtCompound nbtIn = NbtUtils.readNbtFromFileAsPath(file, NbtSizeTracker.ofUnlimitedBytes());
+	                CompoundData data = DataFileUtils.readCompoundDataFromNbtFile(file);
+
+                    if (data != null && !data.isEmpty())
+                    {
+                        this.readFromNBT(data);
+                        //ItemScroller.debugLog("readFromDisk(): Successfully loaded villager's from file '{}'", file.toAbsolutePath());
+                    }
+                    else
+                    {
+                        ItemScroller.LOGGER.warn("readFromDisk(): Error reading villager data from file '{}'", file.toAbsolutePath());
+                    }
+                }
+                // File does not exist
+            }
+            else
+            {
+                ItemScroller.LOGGER.warn("readFromDisk(): Error reading villager data from dir '{}'", saveDir.toAbsolutePath());
             }
         }
         catch (Exception e)
         {
-            ItemScroller.logger.warn("Failed to read villager data from file", e);
+            ItemScroller.LOGGER.warn("Failed to read villager data from file", e);
         }
     }
 
@@ -233,31 +269,50 @@ public class VillagerDataStorage
         {
             try
             {
-                File saveDir = this.getSaveDir();
+                Path saveDir = this.getSaveDirPath();
 
-                if (saveDir.exists() == false && saveDir.mkdirs() == false)
+                if (!Files.exists(saveDir))
                 {
-                    ItemScroller.logger.warn("Failed to create the data storage directory '{}'", saveDir.getPath());
-                    return;
+                    FileUtils.createDirectoriesIfMissing(saveDir);
+                    //ItemScroller.debugLog("writeToDisk(): Creating directory '{}'.", saveDir.toAbsolutePath());
                 }
 
-                File fileTmp  = new File(saveDir, this.getFileName() + ".tmp");
-                File fileReal = new File(saveDir, this.getFileName());
-                FileOutputStream os = new FileOutputStream(fileTmp);
-                NbtIo.writeCompressed(this.writeToNBT(new NbtCompound()), os);
-                os.close();
-
-                if (fileReal.exists())
+                if (Files.isDirectory(saveDir))
                 {
-                    fileReal.delete();
-                }
+                    Path fileTmp = saveDir.resolve(this.getFileName() + ".tmp");
+                    Path fileReal = saveDir.resolve(this.getFileName());
 
-                fileTmp.renameTo(fileReal);
-                this.dirty = false;
+//                    NbtUtils.writeCompressed(this.writeToNBT(), fileTmp);
+	                CompoundData data = this.writeToNBT();
+
+                    // Don't save file if there are no entries.
+                    if (data.isEmpty())
+                    {
+                        if (Files.exists(fileReal))
+                        {
+                            Files.delete(fileReal);
+                        }
+
+                        this.dirty = false;
+                        return;
+                    }
+
+					DataFileUtils.writeCompoundDataToCompressedNbtFile(fileTmp, data);
+
+                    if (Files.exists(fileReal))
+                    {
+                        Files.delete(fileReal);
+                    }
+
+                    Files.move(fileTmp, fileReal);
+
+                    //ItemScroller.debugLog("writeToDisk(): Successfully saved recipes file '{}'", fileReal.toAbsolutePath());
+                    this.dirty = false;
+                }
             }
             catch (Exception e)
             {
-                ItemScroller.logger.warn("Failed to write villager data to file!", e);
+                ItemScroller.LOGGER.warn("Failed to write villager data to file!", e);
             }
         }
     }
