@@ -73,6 +73,8 @@ public class Configs implements IConfigHandler
         public static final ConfigOptionList TRANSLATION_MODE                   = new ConfigOptionList("translationMode",                      i18nMode.FOLLOW_VANILLA).apply(GENERIC_KEY);
         public static final ConfigBoolean VILLAGER_TRADE_USE_GLOBAL_FAVORITES   = new ConfigBoolean("villagerTradeUseGlobalFavorites",         true).apply(GENERIC_KEY);
         public static final ConfigBoolean VILLAGER_TRADE_LIST_REMEMBER_SCROLL   = new ConfigBoolean("villagerTradeListRememberScrollPosition", true).apply(GENERIC_KEY);
+        public static final ConfigBoolean VILLAGER_TRADE_FAVORITES_HOLD         = new ConfigBoolean("villagerTradeFavoritesHold",                false).apply(GENERIC_KEY);
+        public static final ConfigInteger VILLAGER_TRADE_INTERVAL               = new ConfigInteger("villagerTradeInterval",                     2, 1, 60).apply(GENERIC_KEY);
 
         public static final ConfigBoolean SORT_INVENTORY_TOGGLE                 = new ConfigBoolean("sortInventoryToggle",                     false).apply(GENERIC_KEY);
         public static final ConfigBoolean SORT_ASSUME_EMPTY_BOX_STACKS          = new ConfigBoolean("sortAssumeEmptyBoxStacks",                false).apply(GENERIC_KEY);
@@ -110,6 +112,8 @@ public class Configs implements IConfigHandler
                 USE_RECIPE_CACHING,
                 VILLAGER_TRADE_USE_GLOBAL_FAVORITES,
                 VILLAGER_TRADE_LIST_REMEMBER_SCROLL,
+                VILLAGER_TRADE_FAVORITES_HOLD,
+                VILLAGER_TRADE_INTERVAL,
 
                 SORT_INVENTORY_TOGGLE,
                 SORT_ASSUME_EMPTY_BOX_STACKS,

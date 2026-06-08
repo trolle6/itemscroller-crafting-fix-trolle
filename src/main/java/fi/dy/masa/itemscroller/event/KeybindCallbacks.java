@@ -3,6 +3,7 @@ package fi.dy.masa.itemscroller.event;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
+import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -37,6 +38,7 @@ public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
     }
 
     protected int massCraftTicker;
+    protected int villagerTradeTicker;
     private long badRecipeClicks;
 
     private KeybindCallbacks()
@@ -52,6 +54,7 @@ public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
         }
 
         Hotkeys.MASS_CRAFT_TOGGLE.getKeybind().setCallback(new KeyCallbackToggleBooleanConfigWithMessage(Configs.Generic.MASS_CRAFT_HOLD));
+        Hotkeys.VILLAGER_TRADE_FAVORITES_TOGGLE.getKeybind().setCallback(new KeyCallbackToggleBooleanConfigWithMessage(Configs.Generic.VILLAGER_TRADE_FAVORITES_HOLD));
     }
 
     public boolean functionalityEnabled()
@@ -207,6 +210,45 @@ public class KeybindCallbacks implements IHotkeyCallback, IClientTickHandler
         }
 
         this.onClientTickMassCraftImpl(mc);
+        this.onClientTickVillagerTradeImpl(mc);
+    }
+
+    private void onClientTickVillagerTradeImpl(Minecraft mc)
+    {
+        if (mc.player == null || mc.level == null)
+        {
+            return;
+        }
+
+        if (Configs.Toggles.VILLAGER_TRADE_FEATURES.getBooleanValue() &&
+            GuiUtils.getCurrentScreen() instanceof MerchantScreen &&
+            Configs.GUI_BLACKLIST.contains(GuiUtils.getCurrentScreen().getClass().getName()) == false &&
+            (Hotkeys.VILLAGER_TRADE_FAVORITES.getKeybind().isKeybindHeld() ||
+             Configs.Generic.VILLAGER_TRADE_FAVORITES_HOLD.getBooleanValue()))
+        {
+            if (++this.villagerTradeTicker < Configs.Generic.VILLAGER_TRADE_INTERVAL.getIntegerValue())
+            {
+                return;
+            }
+
+            if (Configs.Generic.RATE_LIMIT_CLICK_PACKETS.getBooleanValue())
+            {
+                ClickPacketBuffer.setShouldBufferClickPackets(true);
+            }
+
+            InventoryUtils.villagerTradeEverythingPossibleWithAllFavoritedTrades();
+
+            if (Configs.Generic.RATE_LIMIT_CLICK_PACKETS.getBooleanValue())
+            {
+                ClickPacketBuffer.setShouldBufferClickPackets(false);
+            }
+
+            this.villagerTradeTicker = 0;
+        }
+        else
+        {
+            this.villagerTradeTicker = 0;
+        }
     }
 
     private void onClientTickMassCraftImpl(Minecraft mc)
