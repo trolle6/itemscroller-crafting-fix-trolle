@@ -11,6 +11,7 @@ import fi.dy.masa.itemscroller.util.InventoryUtils;
 public class VillagerFavoriteTradeHandler
 {
     private static boolean tradeOnNextMerchantOpen;
+    private static boolean forcingSneak;
 
     public static boolean isEnabled()
     {
@@ -32,11 +33,39 @@ public class VillagerFavoriteTradeHandler
     public static void reset()
     {
         tradeOnNextMerchantOpen = false;
+        forcingSneak = false;
     }
 
     public static void onClientTick(Minecraft mc)
     {
-        if (tradeOnNextMerchantOpen == false || isEnabled() == false || mc.player == null)
+        if (mc.player == null)
+        {
+            return;
+        }
+
+        updateForcedSneak(mc);
+        handlePendingMerchantTrade(mc);
+    }
+
+    private static void updateForcedSneak(Minecraft mc)
+    {
+        if (isEnabled())
+        {
+            mc.options.keyShift.setDown(true);
+            mc.player.setShiftKeyDown(true);
+            forcingSneak = true;
+        }
+        else if (forcingSneak)
+        {
+            forcingSneak = false;
+            mc.options.keyShift.setDown(false);
+            mc.player.setShiftKeyDown(false);
+        }
+    }
+
+    private static void handlePendingMerchantTrade(Minecraft mc)
+    {
+        if (tradeOnNextMerchantOpen == false || isEnabled() == false)
         {
             return;
         }
